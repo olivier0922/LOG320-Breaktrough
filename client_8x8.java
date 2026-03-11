@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.regex.*;
 
 
 class Client {
@@ -33,6 +34,7 @@ BufferedOutputStream output;
 int[][] board = new int[SIZE][SIZE];
 int myColor = RED;
 Move lastMoveSent = null;
+int invalidMoveIndex = 0;
 
 try {
 myClient = new Socket("localhost", 8888);
@@ -40,36 +42,55 @@ input = new BufferedInputStream(myClient.getInputStream());
 output = new BufferedOutputStream(myClient.getOutputStream());
 
 while (true) {
-char cmd = (char) input.read();
+int cmdValue = input.read();
+if (cmdValue == -1) {
+break;
+}
+char cmd = (char) cmdValue;
+
+if (cmd < '1' || cmd > '5') {
+continue;
+}
+
 System.out.println("Commande serveur: " + cmd);
 
 if (cmd == '1') {
 myColor = RED;
-readBoardFromServer(input, board);
+initBoard(board);
+invalidMoveIndex = 0;
+readAvailablePayload(input, 2048); // consommer les donnees du serveur
 System.out.println("Nouvelle partie! Vous jouez Rouge.");
+printBoard(board);
+System.out.println("Calcul du meilleur coup...");
 Move move = chooseBestMove(board, myColor, SEARCH_DEPTH);
 if (move != null) {
 move.captured = board[move.toX][move.toY];
 applyMove(board, move);
 lastMoveSent = move;
 sendMove(output, move);
+} else {
+System.out.println("ERREUR: aucun coup disponible!");
 }
 }
 
 if (cmd == '2') {
 myColor = BLACK;
-readBoardFromServer(input, board);
+initBoard(board);
+invalidMoveIndex = 0;
+readAvailablePayload(input, 2048); // consommer les donnees du serveur
 System.out.println("Nouvelle partie! Vous jouez Noir.");
+printBoard(board);
 }
 
 if (cmd == '3') {
-String opponentMoveText = readServerPayload(input, 64);
+String opponentMoveText = readAvailablePayload(input, 128);
 System.out.println("Dernier coup adversaire: " + opponentMoveText);
 
 Move opponentMove = parseMove(opponentMoveText);
 if (opponentMove != null) {
 applyMove(board, opponentMove);
 }
+invalidMoveIndex = 0;
 
 Move move = chooseBestMove(board, myColor, SEARCH_DEPTH);
 if (move != null) {
@@ -77,6 +98,8 @@ move.captured = board[move.toX][move.toY];
 applyMove(board, move);
 lastMoveSent = move;
 sendMove(output, move);
+} else {
+System.out.println("ERREUR: aucun coup disponible!");
 }
 }
 
@@ -85,9 +108,11 @@ System.out.println("Coup invalide. Nouvelle tentative.");
 if (lastMoveSent != null) {
 undoMove(board, lastMoveSent, myColor, lastMoveSent.captured);
 }
+invalidMoveIndex++;
 List<Move> legalMoves = generateMoves(board, myColor);
 if (!legalMoves.isEmpty()) {
-Move move = legalMoves.get(0);
+int idx = invalidMoveIndex % legalMoves.size();
+Move move = legalMoves.get(idx);
 move.captured = board[move.toX][move.toY];
 applyMove(board, move);
 lastMoveSent = move;
@@ -96,7 +121,7 @@ sendMove(output, move);
 }
 
 if (cmd == '5') {
-String payload = readServerPayload(input, 64);
+String payload = readAvailablePayload(input, 128);
 System.out.println("Partie terminee. Dernier coup: " + payload);
 break;
 }
@@ -107,7 +132,7 @@ System.out.println(e);
 }
 
 private static void readBoardFromServer(BufferedInputStream input, int[][] board) throws IOException {
-String boardText = readServerPayload(input, 2048);
+String boardText = readAvailablePayload(input, 2048);
 String[] boardValues = boardText.trim().split("\\s+");
 int x = 0;
 int y = 0;
@@ -124,20 +149,66 @@ y++;
 }
 }
 
-private static String readServerPayload(BufferedInputStream input, int maxBytes) throws IOException {
+private static void initBoard(int[][] board) {
+for (int x = 0; x < SIZE; x++) {
+for (int y = 0; y < SIZE; y++) {
+board[x][y] = EMPTY;
+}
+}
+for (int x = 0; x < SIZE; x++) {
+board[x][0] = RED;
+board[x][1] = RED;
+board[x][SIZE - 2] = BLACK;
+board[x][SIZE - 1] = BLACK;
+}
+}
+
+private static void printBoard(int[][] board) {
+System.out.println("Etat du plateau:");
+for (int y = SIZE - 1; y >= 0; y--) {
+for (int x = 0; x < SIZE; x++) {
+char c = '.';
+if (board[x][y] == RED) c = 'R';
+else if (board[x][y] == BLACK) c = 'N';
+System.out.print(c + " ");
+}
+System.out.println();
+}
+}
+
+private static String readAvailablePayload(BufferedInputStream input, int maxBytes) throws IOException {
 try {
-Thread.sleep(60);
+Thread.sleep(80);
 } catch (InterruptedException e) {
 Thread.currentThread().interrupt();
 }
+
+ByteArrayOutputStream out = new ByteArrayOutputStream();
+int idleLoops = 0;
+
+while (out.size() < maxBytes && idleLoops < 5) {
 int size = input.available();
 if (size <= 0) {
-return "";
+idleLoops++;
+try {
+Thread.sleep(20);
+} catch (InterruptedException e) {
+Thread.currentThread().interrupt();
+break;
 }
-int bytesToRead = Math.min(size, maxBytes);
+continue;
+}
+
+idleLoops = 0;
+int bytesToRead = Math.min(size, maxBytes - out.size());
 byte[] buffer = new byte[bytesToRead];
-input.read(buffer, 0, bytesToRead);
-return new String(buffer).trim();
+int read = input.read(buffer, 0, bytesToRead);
+if (read > 0) {
+out.write(buffer, 0, read);
+}
+}
+
+return out.toString().trim();
 }
 
 private static List<Move> generateMoves(int[][] board, int color) {
@@ -259,12 +330,8 @@ opponentAdvance += (opponent == RED) ? y : (SIZE - 1 - y);
 }
 }
 
-if (hasWinner(board, myColor)) {
-return 100000;
-}
-if (hasWinner(board, opponent)) {
-return -100000;
-}
+if (hasWinner(board, myColor)) return 100000;
+if (hasWinner(board, opponent)) return -100000;
 
 return (myPieces - opponentPieces) * 100 + (myAdvance - opponentAdvance) * 10;
 }
@@ -276,12 +343,8 @@ if (board[x][targetRow] == color) {
 return true;
 }
 }
-
 int opponent = (color == RED) ? BLACK : RED;
-if (countPieces(board, opponent) == 0) {
-return true;
-}
-return generateMoves(board, opponent).isEmpty();
+return countPieces(board, opponent) == 0;
 }
 
 private static int countPieces(int[][] board, int color) {
@@ -308,17 +371,23 @@ board[move.fromX][move.fromY] = color;
 }
 
 private static Move parseMove(String moveText) {
-if (moveText == null) {
+if (moveText == null) return null;
+
+Matcher coordMatcher = Pattern.compile("([A-Ha-h][1-8])").matcher(moveText);
+if (!coordMatcher.find()) {
 return null;
 }
-String digits = moveText.replaceAll("[^0-9]", "");
-if (digits.length() < 4) {
+String from = coordMatcher.group(1).toUpperCase();
+
+if (!coordMatcher.find()) {
 return null;
 }
-int fromX = Character.getNumericValue(digits.charAt(0));
-int fromY = Character.getNumericValue(digits.charAt(1));
-int toX = Character.getNumericValue(digits.charAt(2));
-int toY = Character.getNumericValue(digits.charAt(3));
+String to = coordMatcher.group(1).toUpperCase();
+
+int fromX = from.charAt(0) - 'A';
+int fromY = from.charAt(1) - '1';
+int toX = to.charAt(0) - 'A';
+int toY = to.charAt(1) - '1';
 
 if (fromX < 0 || fromX >= SIZE || toX < 0 || toX >= SIZE || fromY < 0 || fromY >= SIZE || toY < 0 || toY >= SIZE) {
 return null;
@@ -327,7 +396,11 @@ return new Move(fromX, fromY, toX, toY);
 }
 
 private static void sendMove(BufferedOutputStream output, Move move) throws IOException {
-String formatted = "" + move.fromX + move.fromY + move.toX + move.toY;
+char fromCol = (char) ('A' + move.fromX);
+char fromRow = (char) ('1' + move.fromY);
+char toCol = (char) ('A' + move.toX);
+char toRow = (char) ('1' + move.toY);
+String formatted = "" + fromCol + fromRow + "-" + toCol + toRow;
 System.out.println("Coup joue: " + formatted);
 output.write(formatted.getBytes(), 0, formatted.length());
 output.flush();
