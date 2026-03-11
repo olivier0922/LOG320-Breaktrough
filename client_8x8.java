@@ -60,8 +60,6 @@ initBoard(board);
 invalidMoveIndex = 0;
 readAvailablePayload(input, 2048); // consommer les donnees du serveur
 System.out.println("Nouvelle partie! Vous jouez Rouge.");
-printBoard(board);
-System.out.println("Calcul du meilleur coup...");
 Move move = chooseBestMove(board, myColor, SEARCH_DEPTH);
 if (move != null) {
 move.captured = board[move.toX][move.toY];
@@ -79,7 +77,6 @@ initBoard(board);
 invalidMoveIndex = 0;
 readAvailablePayload(input, 2048); // consommer les donnees du serveur
 System.out.println("Nouvelle partie! Vous jouez Noir.");
-printBoard(board);
 }
 
 if (cmd == '3') {
@@ -131,24 +128,6 @@ System.out.println(e);
 }
 }
 
-private static void readBoardFromServer(BufferedInputStream input, int[][] board) throws IOException {
-String boardText = readAvailablePayload(input, 2048);
-String[] boardValues = boardText.trim().split("\\s+");
-int x = 0;
-int y = 0;
-for (int i = 0; i < boardValues.length && y < SIZE; i++) {
-if (boardValues[i].isEmpty()) {
-continue;
-}
-board[x][y] = Integer.parseInt(boardValues[i]);
-x++;
-if (x == SIZE) {
-x = 0;
-y++;
-}
-}
-}
-
 private static void initBoard(int[][] board) {
 for (int x = 0; x < SIZE; x++) {
 for (int y = 0; y < SIZE; y++) {
@@ -160,19 +139,6 @@ board[x][0] = RED;
 board[x][1] = RED;
 board[x][SIZE - 2] = BLACK;
 board[x][SIZE - 1] = BLACK;
-}
-}
-
-private static void printBoard(int[][] board) {
-System.out.println("Etat du plateau:");
-for (int y = SIZE - 1; y >= 0; y--) {
-for (int x = 0; x < SIZE; x++) {
-char c = '.';
-if (board[x][y] == RED) c = 'R';
-else if (board[x][y] == BLACK) c = 'N';
-System.out.print(c + " ");
-}
-System.out.println();
 }
 }
 
