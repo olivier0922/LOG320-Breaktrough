@@ -11,11 +11,11 @@ class Client {
 
     private static final int BASE_SEARCH_DEPTH = 4;
     private static final int ENDGAME_SEARCH_DEPTH = 5;
-    private static final int TACTICAL_SEARCH_DEPTH = 5;
+    private static final int TACTICAL_SEARCH_DEPTH = 6;
     private static final int ENDGAME_PIECE_THRESHOLD = 12;
-    private static final int MAX_ITERATIVE_DEPTH = 8;
-    private static final long SEARCH_TIME_BUDGET_MS = 4300;
-    private static final int IMMEDIATE_LOSS_PENALTY = 400_000;
+    private static final int MAX_ITERATIVE_DEPTH = 9;
+    private static final long SEARCH_TIME_BUDGET_MS = 4650;
+    private static final int IMMEDIATE_LOSS_PENALTY = 500_000;
     private static final int MAX_TRANSPOSITION_SIZE = 300_000;
 
     private static final int WIN_SCORE = 1_000_000;
@@ -677,6 +677,11 @@ class Client {
         int advance = (color == RED) ? move.toY : (SIZE - 1 - move.toY);
         score += advance * 15;
 
+        int promotionThreatRow = (color == RED) ? SIZE - 2 : 1;
+        if (move.toY == promotionThreatRow) {
+            score += 120;
+        }
+
         if (move.toX >= 2 && move.toX <= 5) {
             score += 8;
         }
@@ -795,10 +800,10 @@ class Client {
 
         int tacticalPressure = 0;
         if (hasImmediatePromotionThreat(board, myColor)) {
-            tacticalPressure += 120_000;
+            tacticalPressure += 150_000;
         }
         if (hasImmediatePromotionThreat(board, opponent)) {
-            tacticalPressure -= 120_000;
+            tacticalPressure -= 150_000;
         }
 
         int myMaterial = countPieces(board, myColor);
@@ -845,7 +850,7 @@ class Client {
             }
         }
 
-        score += countPromotionThreats(board, color) * 60;
+        score += countPromotionThreats(board, color) * 90;
         return score;
     }
 
