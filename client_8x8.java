@@ -10,11 +10,11 @@ class Client {
     private static final int RED = 4;
 
     private static final int BASE_SEARCH_DEPTH = 4;
-    private static final int ENDGAME_SEARCH_DEPTH = 5;
-    private static final int TACTICAL_SEARCH_DEPTH = 6;
+    private static final int ENDGAME_SEARCH_DEPTH = 4;
+    private static final int TACTICAL_SEARCH_DEPTH = 5;
     private static final int ENDGAME_PIECE_THRESHOLD = 12;
-    private static final int MAX_ITERATIVE_DEPTH = 9;
-    private static final long SEARCH_TIME_BUDGET_MS = 4650;
+    private static final int MAX_ITERATIVE_DEPTH = 8;
+    private static final long SEARCH_TIME_BUDGET_MS = 4100;
     private static final int IMMEDIATE_LOSS_PENALTY = 500_000;
     private static final int MAX_TRANSPOSITION_SIZE = 300_000;
 
